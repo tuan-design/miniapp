@@ -8,7 +8,6 @@
     <link rel="stylesheet" href="style.css">
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
@@ -16,98 +15,61 @@
     <div id="app-container">
         <header id="main-header">
             <button id="prev-month-btn" class="nav-btn">‹</button>
-            <h1 id="month-display">Đang tải...</h1>
+            <h1 id="month-display" class="skeleton skeleton-text">&nbsp;</h1>
             <button id="next-month-btn" class="nav-btn">›</button>
         </header>
 
-        <div id="loader" class="loader-container">
-            <div class="loader"></div>
-        </div>
-
-        <main id="pages-container" class="hidden">
-
+        <main id="pages-container">
             <div id="page-dashboard" class="page">
                 <section class="summary-grid">
                     <div class="card">
                         <h2 class="card-title text-green">THU NHẬP</h2>
-                        <p id="income-amount" class="card-amount">0 VNĐ</p>
+                        <p id="income-amount" class="card-amount skeleton skeleton-line">&nbsp;</p>
                     </div>
                     <div class="card">
                         <h2 class="card-title text-red">CHI TIÊU</h2>
-                        <p id="expense-amount" class="card-amount">0 VNĐ</p>
+                        <p id="expense-amount" class="card-amount skeleton skeleton-line">&nbsp;</p>
                     </div>
                     <div class="card">
                         <h2 class="card-title text-blue">SỐ DƯ</h2>
-                        <p id="balance-amount" class="card-amount">0 VNĐ</p>
+                        <p id="balance-amount" class="card-amount skeleton skeleton-line">&nbsp;</p>
                     </div>
                 </section>
                 <section class="card">
                     <h2 class="section-title">Tỷ Trọng Chi Tiêu</h2>
-                    <div class="chart-container">
+                    <div id="chart-container" class="chart-container skeleton skeleton-block">
                          <canvas id="expense-pie-chart"></canvas>
                          <p id="no-chart-data" class="no-data-message hidden">Không có dữ liệu chi tiêu.</p>
                     </div>
                 </section>
                 <section class="card">
                     <h2 class="section-title">Giao Dịch Gần Đây</h2>
-                    <div id="recent-transactions-list" class="list-container"></div>
+                    <div id="recent-transactions-list" class="list-container">
+                        <div class="transaction-item-skeleton">
+                            <div class="details"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line-short"></div></div>
+                            <div class="skeleton skeleton-line" style="width: 30%;"></div>
+                        </div>
+                        <div class="transaction-item-skeleton">
+                            <div class="details"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line-short"></div></div>
+                            <div class="skeleton skeleton-line" style="width: 25%;"></div>
+                        </div>
+                         <div class="transaction-item-skeleton">
+                            <div class="details"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line-short"></div></div>
+                            <div class="skeleton skeleton-line" style="width: 28%;"></div>
+                        </div>
+                    </div>
                 </section>
             </div>
 
-            <div id="page-transactions" class="page hidden">
-                <div class="card">
-                    <h2 class="section-title">Tất cả giao dịch</h2>
-                    <div class="filters">
-                        <input type="search" id="search-input" placeholder="Tìm kiếm giao dịch...">
-                        <div id="filter-buttons" class="filter-btn-group">
-                            <button data-filter="all" class="filter-btn active">Tất cả</button>
-                            <button data-filter="Chi tiêu" class="filter-btn">Chi tiêu</button>
-                            <button data-filter="Thu nhập" class="filter-btn">Thu nhập</button>
-                        </div>
-                    </div>
-                    <div id="full-transactions-list" class="list-container"></div>
-                </div>
-            </div>
-
-            <div id="page-reports" class="page hidden">
-                <div class="card">
-                    <h2 class="section-title">So sánh Thu - Chi các tháng</h2>
-                     <div class="chart-container">
-                         <canvas id="income-expense-bar-chart"></canvas>
-                     </div>
-                </div>
-                <div class="card">
-                    <h2 class="section-title">Xu Hướng Tài Chính</h2>
-                     <div class="chart-container">
-                         <canvas id="trends-line-chart"></canvas>
-                     </div>
-                </div>
-            </div>
-
-            <div id="page-budgets" class="page hidden">
-                <div class="card">
-                    <div class="section-header">
-                        <h2 class="section-title">Ngân sách tháng <span class="current-budget-month"></span></h2>
-                        <button id="save-budgets-btn" class="save-btn">Lưu</button>
-                    </div>
-                    <div id="budgets-list" class="list-container"></div>
-                </div>
-            </div>
-
-            <div id="page-settings" class="page hidden">
-                <div class="card">
-                     <div class="section-header">
-                        <h2 class="section-title">Quản lý Danh mục & Từ khóa</h2>
-                        <button id="save-settings-btn" class="save-btn">Lưu</button>
-                    </div>
-                    <div id="settings-list" class="list-container"></div>
-                </div>
-            </div>
+            <div id="page-transactions" class="page hidden"></div>
+            <div id="page-reports" class="page hidden"></div>
+            <div id="page-budgets" class="page hidden"></div>
+            <div id="page-settings" class="page hidden"></div>
         </main>
     </div>
 
     <footer id="tab-bar">
-        <button class="tab-button active" data-page="dashboard">
+         <button class="tab-button active" data-page="dashboard">
             <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
             <span class="tab-label">Tổng quan</span>
         </button>
@@ -129,6 +91,6 @@
         </button>
     </footer>
 
-    <script src="script.js"></script>
+    <script src="script.js" defer></script>
 </body>
 </html>
