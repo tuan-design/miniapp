@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // =================================================================
     // CẤU HÌNH VÀ KHỞI TẠO
     // =================================================================
-    const apiUrl = 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL';
+    const apiUrl = 'https://script.google.com/macros/s/AKfycbyz1QyHYzzbPca6WpYcs1aHCbdmesEiFupTKzjReIIx7nZsDu1x4k93WWitmOPs-J_b/exec';
     const tg = window.Telegram.WebApp;
     tg.ready();
     tg.expand();
