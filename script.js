@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // =================================================================
     // CẤU HÌNH VÀ KHỞI TẠO
     // =================================================================
-    const apiUrl = 'https://script.google.com/macros/s/AKfycbyz1QyHYzzbPca6WpYcs1aHCbdmesEiFupTKzjReIIx7nZsDu1x4k93WWitmOPs-J_b/exec';
+    const apiUrl = 'https://script.google.com/macros/s/AKfycbze-w1rAOuVXHXPvqCXAn2Vr0kn3D7lw0I4Rf4umiqtUrYrket5BV2CvLntEdG7_Mld/exec
     const tg = window.Telegram.WebApp;
     tg.ready();
     tg.expand();
