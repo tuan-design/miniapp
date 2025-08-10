@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tổng Quan Tài Chính</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <style>
+        /* Tùy chỉnh để giao diện dùng màu của theme Telegram */
+        body {
+            background-color: var(--tg-theme-bg-color, #f3f4f6);
+            color: var(--tg-theme-text-color, #111827);
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .card, .header {
+            background-color: var(--tg-theme-secondary-bg-color, #ffffff);
+        }
+
+        /* Hiệu ứng xoay cho icon loading */
+        .loader {
+            border-top-color: var(--tg-theme-button-color, #3b82f6);
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="antialiased font-sans">
+
+    <div id="app-container" class="max-w-screen-lg mx-auto p-4">
+
+        <header class="header sticky top-0 z-10 p-4 rounded-lg shadow-md mb-6 flex items-center justify-between">
+            <button id="prev-month-btn" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+            </button>
+            <h1 id="month-display" class="text-xl font-bold text-center">Đang tải...</h1>
+            <button id="next-month-btn" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+            </button>
+        </header>
+
+        <div id="loader" class="flex justify-center items-center h-64">
+            <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
+        </div>
+
+        <main id="main-content" class="hidden">
+            <section class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div class="card p-4 rounded-lg shadow-md">
+                    <h2 class="text-sm font-medium text-green-500">THU NHẬP</h2>
+                    <p id="income-amount" class="text-2xl font-semibold">0 VNĐ</p>
+                </div>
+                <div class="card p-4 rounded-lg shadow-md">
+                    <h2 class="text-sm font-medium text-red-500">CHI TIÊU</h2>
+                    <p id="expense-amount" class="text-2xl font-semibold">0 VNĐ</p>
+                </div>
+                <div class="card p-4 rounded-lg shadow-md">
+                    <h2 class="text-sm font-medium text-blue-500">SỐ DƯ</h2>
+                    <p id="balance-amount" class="text-2xl font-semibold">0 VNĐ</p>
+                </div>
+            </section>
+
+            <section class="card p-4 rounded-lg shadow-md mb-6">
+                <h2 class="text-lg font-bold mb-4">Tỷ Trọng Chi Tiêu</h2>
+                <div id="chart-container" class="relative h-64">
+                     <canvas id="expense-pie-chart"></canvas>
+                     <p id="no-chart-data" class="hidden absolute inset-0 flex items-center justify-center text-gray-500">Không có dữ liệu chi tiêu cho tháng này.</p>
+                </div>
+            </section>
+
+            <section class="card p-4 rounded-lg shadow-md">
+                <h2 class="text-lg font-bold mb-4">Giao Dịch Gần Đây</h2>
+                <div id="recent-transactions-list" class="space-y-3">
+                    <p id="no-transactions-data" class="text-gray-500">Không có giao dịch nào.</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+<script>
+    // =================================================================
+    // PHẦN CẤU HÌNH - BẠN CẦN THAY ĐỔI
+    // =================================================================
+    
+    // BƯỚC QUAN TRỌNG: Dán URL ứng dụng web của Google Apps Script của bạn vào đây
+    const apiUrl = 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL';
+
+    // =================================================================
+    // PHẦN LOGIC CỦA ỨNG DỤNG
+    // =================================================================
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        // Khởi tạo Telegram Web App
+        Telegram.WebApp.ready();
+        Telegram.WebApp.expand();
+
+        // Lấy các đối tượng trên trang
+        const loader = document.getElementById('loader');
+        const mainContent = document.getElementById('main-content');
+        const monthDisplay = document.getElementById('month-display');
+        const prevMonthBtn = document.getElementById('prev-month-btn');
+        const nextMonthBtn = document.getElementById('next-month-btn');
+        
+        const incomeEl = document.getElementById('income-amount');
+        const expenseEl = document.getElementById('expense-amount');
+        const balanceEl = document.getElementById('balance-amount');
+        
+        const chartContainer = document.getElementById('chart-container');
+        const noChartDataEl = document.getElementById('no-chart-data');
+        const transactionsListEl = document.getElementById('recent-transactions-list');
+        const noTransactionsDataEl = document.getElementById('no-transactions-data');
+        const chartCanvas = document.getElementById('expense-pie-chart');
+        
+        let expensePieChart; // Biến để lưu trữ biểu đồ
+
+        // Quản lý trạng thái ngày tháng
+        let currentDate = new Date();
+        let currentMonth = currentDate.getMonth() + 1;
+        let currentYear = currentDate.getFullYear();
+
+        // Hàm định dạng số tiền
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+        };
+        
+        // Hàm chính để tải dữ liệu
+        async function fetchDataForMonth(month, year) {
+            loader.style.display = 'flex';
+            mainContent.style.display = 'none';
+            monthDisplay.textContent = `Tháng ${month}/${year}`;
+
+            try {
+                // Gọi 2 API song song để tăng tốc độ
+                const [summaryRes, transactionsRes] = await Promise.all([
+                    fetch(`${apiUrl}?action=getFinancialSummary&month=${month}&year=${year}`),
+                    fetch(`${apiUrl}?action=getTransactions&month=${month}&year=${year}`)
+                ]);
+
+                if (!summaryRes.ok || !transactionsRes.ok) {
+                    throw new Error('Lỗi khi kết nối đến server.');
+                }
+
+                const summaryData = await summaryRes.json();
+                const transactionsData = await transactionsRes.json();
+
+                // Cập nhật giao diện
+                updateSummaryCards(summaryData);
+                renderPieChart(transactionsData);
+                renderRecentTransactions(transactionsData);
+
+            } catch (error) {
+                console.error('Fetch error:', error);
+                Telegram.WebApp.showAlert('Đã xảy ra lỗi khi tải dữ liệu. Vui lòng thử lại.');
+            } finally {
+                loader.style.display = 'none';
+                mainContent.style.display = 'block';
+            }
+        }
+
+        // Cập nhật các thẻ tổng quan
+        function updateSummaryCards(data) {
+            incomeEl.textContent = formatCurrency(data.income || 0);
+            expenseEl.textContent = formatCurrency(data.expense || 0);
+            balanceEl.textContent = formatCurrency(data.balance || 0);
+            balanceEl.classList.toggle('text-red-500', (data.balance || 0) < 0);
+        }
+
+        // Vẽ biểu đồ tròn
+        function renderPieChart(transactions) {
+            const expenseTransactions = transactions.filter(t => t.type === 'Chi tiêu');
+            
+            if (expenseTransactions.length === 0) {
+                chartCanvas.style.display = 'none';
+                noChartDataEl.style.display = 'flex';
+                return;
+            }
+            
+            chartCanvas.style.display = 'block';
+            noChartDataEl.style.display = 'none';
+
+            const categoryTotals = expenseTransactions.reduce((acc, curr) => {
+                acc[curr.category] = (acc[curr.category] || 0) + curr.amount;
+                return acc;
+            }, {});
+
+            const labels = Object.keys(categoryTotals);
+            const data = Object.values(categoryTotals);
+
+            if (expensePieChart) {
+                expensePieChart.destroy(); // Xóa biểu đồ cũ trước khi vẽ mới
+            }
+
+            expensePieChart = new Chart(chartCanvas, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: [
+                            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+                            '#FF9F40', '#E7E9ED', '#FF6384', '#C9CBCF', '#7BC22A'
+                        ],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    legend: {
+                        position: 'bottom',
+                    }
+                }
+            });
+        }
+        
+        // Hiển thị 5 giao dịch gần nhất
+        function renderRecentTransactions(transactions) {
+            transactionsListEl.innerHTML = ''; // Xóa danh sách cũ
+            
+            if (transactions.length === 0) {
+                transactionsListEl.appendChild(noTransactionsDataEl);
+                noTransactionsDataEl.style.display = 'block';
+                return;
+            }
+            
+            noTransactionsDataEl.style.display = 'none';
+            const recent = transactions.slice(0, 5); // Lấy 5 giao dịch đầu tiên
+
+            recent.forEach(t => {
+                const isExpense = t.type === 'Chi tiêu';
+                const amountClass = isExpense ? 'text-red-500' : 'text-green-500';
+                const sign = isExpense ? '-' : '+';
+
+                const transactionEl = document.createElement('div');
+                transactionEl.className = 'flex items-center justify-between p-2 rounded-md';
+                transactionEl.innerHTML = `
+                    <div class="flex-1">
+                        <p class="font-semibold">${t.content}</p>
+                        <p class="text-xs text-gray-500">${t.date} - ${t.category}</p>
+                    </div>
+                    <p class="font-bold ${amountClass}">${sign}${formatCurrency(t.amount)}</p>
+                `;
+                transactionsListEl.appendChild(transactionEl);
+            });
+        }
+
+        // Xử lý sự kiện nút
+        prevMonthBtn.addEventListener('click', () => {
+            currentMonth--;
+            if (currentMonth < 1) {
+                currentMonth = 12;
+                currentYear--;
+            }
+            fetchDataForMonth(currentMonth, currentYear);
+        });
+
+        nextMonthBtn.addEventListener('click', () => {
+            currentMonth++;
+            if (currentMonth > 12) {
+                currentMonth = 1;
+                currentYear++;
+            }
+            fetchDataForMonth(currentMonth, currentYear);
+        });
+
+        // Tải dữ liệu lần đầu
+        fetchDataForMonth(currentMonth, currentYear);
+    });
+</script>
+
+</body>
+</html>
