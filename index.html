@@ -4,11 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Quản Lý Tài Chính</title>
-    
     <link rel="stylesheet" href="style.css">
-    
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -22,18 +19,9 @@
         <main id="pages-container">
             <div id="page-dashboard" class="page">
                 <section class="summary-grid">
-                    <div class="card">
-                        <h2 class="card-title text-green">THU NHẬP</h2>
-                        <p id="income-amount" class="card-amount skeleton skeleton-line">&nbsp;</p>
-                    </div>
-                    <div class="card">
-                        <h2 class="card-title text-red">CHI TIÊU</h2>
-                        <p id="expense-amount" class="card-amount skeleton skeleton-line">&nbsp;</p>
-                    </div>
-                    <div class="card">
-                        <h2 class="card-title text-blue">SỐ DƯ</h2>
-                        <p id="balance-amount" class="card-amount skeleton skeleton-line">&nbsp;</p>
-                    </div>
+                    <div class="card"><h2 class="card-title text-green">THU NHẬP</h2><p id="income-amount" class="card-amount skeleton skeleton-line">&nbsp;</p></div>
+                    <div class="card"><h2 class="card-title text-red">CHI TIÊU</h2><p id="expense-amount" class="card-amount skeleton skeleton-line">&nbsp;</p></div>
+                    <div class="card"><h2 class="card-title text-blue">SỐ DƯ</h2><p id="balance-amount" class="card-amount skeleton skeleton-line">&nbsp;</p></div>
                 </section>
                 <section class="card">
                     <h2 class="section-title">Tỷ Trọng Chi Tiêu</h2>
@@ -45,50 +33,70 @@
                 <section class="card">
                     <h2 class="section-title">Giao Dịch Gần Đây</h2>
                     <div id="recent-transactions-list" class="list-container">
-                        <div class="transaction-item-skeleton">
-                            <div class="details"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line-short"></div></div>
-                            <div class="skeleton skeleton-line" style="width: 30%;"></div>
-                        </div>
-                        <div class="transaction-item-skeleton">
-                            <div class="details"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line-short"></div></div>
-                            <div class="skeleton skeleton-line" style="width: 25%;"></div>
-                        </div>
-                         <div class="transaction-item-skeleton">
-                            <div class="details"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line-short"></div></div>
-                            <div class="skeleton skeleton-line" style="width: 28%;"></div>
-                        </div>
+                        <div class="transaction-item-skeleton"><div class="details"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line-short"></div></div><div class="skeleton skeleton-line" style="width: 30%;"></div></div>
+                        <div class="transaction-item-skeleton"><div class="details"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line-short"></div></div><div class="skeleton skeleton-line" style="width: 25%;"></div></div>
+                        <div class="transaction-item-skeleton"><div class="details"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line-short"></div></div><div class="skeleton skeleton-line" style="width: 28%;"></div></div>
                     </div>
                 </section>
             </div>
 
-            <div id="page-transactions" class="page hidden"></div>
-            <div id="page-reports" class="page hidden"></div>
-            <div id="page-budgets" class="page hidden"></div>
-            <div id="page-settings" class="page hidden"></div>
+            <div id="page-transactions" class="page hidden">
+                <div class="card">
+                    <div class="filters">
+                        <input type="search" id="search-input" placeholder="Tìm kiếm giao dịch...">
+                        <div id="filter-buttons" class="filter-btn-group">
+                            <button data-filter="all" class="filter-btn active">Tất cả</button>
+                            <button data-filter="Chi tiêu" class="filter-btn">Chi tiêu</button>
+                            <button data-filter="Thu nhập" class="filter-btn">Thu nhập</button>
+                        </div>
+                    </div>
+                    <div id="full-transactions-list" class="list-container"></div>
+                </div>
+            </div>
+
+            <div id="page-reports" class="page hidden">
+                <div class="card">
+                    <h2 class="section-title">So sánh Thu - Chi các tháng</h2>
+                     <div class="chart-container">
+                         <canvas id="income-expense-bar-chart"></canvas>
+                     </div>
+                </div>
+                <div class="card">
+                    <h2 class="section-title">Xu Hướng Tài Chính</h2>
+                     <div class="chart-container">
+                         <canvas id="trends-line-chart"></canvas>
+                     </div>
+                </div>
+            </div>
+
+            <div id="page-budgets" class="page hidden">
+                <div class="card">
+                    <div class="section-header">
+                        <h2 class="section-title">Ngân sách tháng <span id="current-budget-month"></span></h2>
+                        <button id="save-budgets-btn" class="save-btn">Lưu</button>
+                    </div>
+                    <div id="budgets-list" class="list-container"></div>
+                </div>
+            </div>
+
+            <div id="page-settings" class="page hidden">
+                <div class="card">
+                     <div class="section-header">
+                        <h2 class="section-title">Quản lý Danh mục & Từ khóa</h2>
+                        <button id="save-settings-btn" class="save-btn">Lưu</button>
+                    </div>
+                    <div id="settings-list" class="list-container"></div>
+                </div>
+            </div>
         </main>
     </div>
 
     <footer id="tab-bar">
-         <button class="tab-button active" data-page="dashboard">
-            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
-            <span class="tab-label">Tổng quan</span>
-        </button>
-        <button class="tab-button" data-page="transactions">
-            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
-            <span class="tab-label">Giao dịch</span>
-        </button>
-        <button class="tab-button" data-page="reports">
-            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-            <span class="tab-label">Báo cáo</span>
-        </button>
-        <button class="tab-button" data-page="budgets">
-             <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
-            <span class="tab-label">Ngân sách</span>
-        </button>
-        <button class="tab-button" data-page="settings">
-            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-            <span class="tab-label">Cài đặt</span>
-        </button>
+         <button class="tab-button active" data-page="dashboard"><svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg><span class="tab-label">Tổng quan</span></button>
+        <button class="tab-button" data-page="transactions"><svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg><span class="tab-label">Giao dịch</span></button>
+        <button class="tab-button" data-page="reports"><svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg><span class="tab-label">Báo cáo</span></button>
+        <button class="tab-button" data-page="budgets"><svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg><span class="tab-label">Ngân sách</span></button>
+        <button class="tab-button" data-page="settings"><svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg><span class="tab-label">Cài đặt</span></button>
     </footer>
 
     <script src="script.js" defer></script>
