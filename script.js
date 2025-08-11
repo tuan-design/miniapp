@@ -2,17 +2,24 @@ document.addEventListener('DOMContentLoaded', () => {
     // =================================================================
     // CẤU HÌNH VÀ KHỞI TẠO
     // =================================================================
-    const apiUrl = 'https://script.google.com/macros/s/AKfycbze-w1rAOuVXHXPvqCXAn2Vr0kn3D7lw0I4Rf4umiqtUrYrket5BV2CvLntEdG7_Mld/exec
+
+    // QUAN TRỌNG: Dán URL Google Apps Script Web App của bạn vào đây
+    const apiUrl = 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL';
+
+    // Khởi tạo Telegram Web App
     const tg = window.Telegram.WebApp;
     tg.ready();
     tg.expand();
     try {
+        // Cố gắng đặt màu header của Mini App trùng với theme Telegram
         tg.setHeaderColor(getComputedStyle(document.documentElement).getPropertyValue('--tg-bg-color').trim());
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error("Không thể đặt màu header:", e); }
 
     // =================================================================
-    // LẤY CÁC ĐỐI TƯỢNG DOM
+    // LẤY CÁC ĐỐI TƯỢNG DOM (ELEMENTS)
     // =================================================================
+    
+    // Chung
     const monthDisplay = document.getElementById('month-display');
     const prevMonthBtn = document.getElementById('prev-month-btn');
     const nextMonthBtn = document.getElementById('next-month-btn');
@@ -53,20 +60,24 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMonth = currentDate.getMonth() + 1;
     let currentYear = currentDate.getFullYear();
     
-    let allTransactions = [];
-    let yearlySummary = { year: 0, data: [] };
-    let allCategoriesAndKeywords = [];
+    // Biến lưu trữ (cache) dữ liệu để tránh gọi API liên tục
+    let monthlyDataCache = {};
+    let yearlySummaryCache = {};
+    let categoriesAndKeywordsCache = null;
     
+    // Biến lưu trữ các biểu đồ
     let expensePieChart, incomeExpenseBarChart, trendsLineChart;
     
     // =================================================================
     // HÀM TIỆN ÍCH
     // =================================================================
+    
     const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
     
     // =================================================================
     // LOGIC ĐIỀU HƯỚNG (NAVIGATION)
     // =================================================================
+
     function navigateTo(pageId) {
         pages.forEach(page => page.classList.add('hidden'));
         tabButtons.forEach(btn => btn.classList.remove('active'));
@@ -74,9 +85,9 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById(`page-${pageId}`).classList.remove('hidden');
         document.querySelector(`.tab-button[data-page="${pageId}"]`).classList.add('active');
 
-        // Khi chuyển tab, tải dữ liệu đặc thù nếu cần
+        // Khi chuyển tab, tải dữ liệu đặc thù cho tab đó
         const isYearlyView = pageId === 'reports';
-        monthDisplay.style.visibility = isYearlyView ? 'hidden' : 'visible'; // Ẩn/hiện bộ lọc tháng
+        monthDisplay.style.visibility = isYearlyView ? 'hidden' : 'visible';
         prevMonthBtn.style.visibility = isYearlyView ? 'hidden' : 'visible';
         nextMonthBtn.style.visibility = isYearlyView ? 'hidden' : 'visible';
 
@@ -86,10 +97,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 fetchAndRenderYearlyData(currentYear);
                 break;
             case 'budgets':
-                fetchAndRenderBudgets(currentMonth, currentYear);
+                fetchAndRenderBudgetsPage(currentMonth, currentYear);
                 break;
             case 'settings':
-                fetchAndRenderSettings();
+                fetchAndRenderSettingsPage();
                 break;
         }
     }
@@ -101,7 +112,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // =================================================================
     // LOGIC TẢI DỮ LIỆU TỪ BACKEND
     // =================================================================
+
     async function fetchMainDataForMonth(month, year) {
+        const cacheKey = `${year}-${month}`;
+        if (monthlyDataCache[cacheKey]) {
+            const { summaryData, transactionsData } = monthlyDataCache[cacheKey];
+            renderDashboard(summaryData, transactionsData);
+            renderTransactionsPage(transactionsData);
+            return;
+        }
+
         try {
             const [summaryRes, transactionsRes] = await Promise.all([
                 fetch(`${apiUrl}?action=getFinancialSummary&month=${month}&year=${year}`),
@@ -110,33 +130,35 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!summaryRes.ok || !transactionsRes.ok) throw new Error('Lỗi mạng');
             
             const summaryData = await summaryRes.json();
-            allTransactions = await transactionsRes.json();
+            const transactionsData = await transactionsRes.json();
+            
+            monthlyDataCache[cacheKey] = { summaryData, transactionsData };
 
-            renderDashboard(summaryData, allTransactions);
-            renderTransactionsPage(allTransactions);
+            renderDashboard(summaryData, transactionsData);
+            renderTransactionsPage(transactionsData);
 
         } catch (error) {
-            tg.showAlert('Đã xảy ra lỗi khi tải dữ liệu: ' + error.message);
+            tg.showAlert('Đã xảy ra lỗi khi tải dữ liệu tháng: ' + error.message);
         }
     }
 
     async function fetchAndRenderYearlyData(year) {
-        if (yearlySummary.year === year) {
-            renderReportsPage(yearlySummary.data);
+        if (yearlySummaryCache.year === year) {
+            renderReportsPage(yearlySummaryCache.data);
             return;
         }
         try {
              const res = await fetch(`${apiUrl}?action=getYearlySummary&year=${year}`);
              if (!res.ok) throw new Error('Lỗi mạng');
              const data = await res.json();
-             yearlySummary = { year: year, data: data };
+             yearlySummaryCache = { year: year, data: data };
              renderReportsPage(data);
         } catch (e) {
              tg.showAlert('Lỗi tải dữ liệu báo cáo năm.');
         }
     }
 
-    async function fetchAndRenderBudgets(month, year) {
+    async function fetchAndRenderBudgetsPage(month, year) {
         try {
             const [budgetsRes, categoriesRes, transactionsRes] = await Promise.all([
                 fetch(`${apiUrl}?action=getBudgets&month=${month}&year=${year}`),
@@ -147,23 +169,23 @@ document.addEventListener('DOMContentLoaded', () => {
              const budgetsData = await budgetsRes.json();
              const categoriesData = await categoriesRes.json();
              const transactionsData = await transactionsRes.json();
-             allCategoriesAndKeywords = categoriesData;
+             categoriesAndKeywordsCache = categoriesData;
              renderBudgetsPage(budgetsData, transactionsData, categoriesData, month, year);
         } catch(e) {
             tg.showAlert('Lỗi tải dữ liệu ngân sách.');
         }
     }
 
-    async function fetchAndRenderSettings() {
-        if(allCategoriesAndKeywords.length > 0) {
-            renderSettingsPage(allCategoriesAndKeywords);
+    async function fetchAndRenderSettingsPage() {
+        if(categoriesAndKeywordsCache) {
+            renderSettingsPage(categoriesAndKeywordsCache);
             return;
         }
         try {
             const res = await fetch(`${apiUrl}?action=getCategoriesAndKeywords`);
             if (!res.ok) throw new Error('Lỗi mạng');
-            allCategoriesAndKeywords = await res.json();
-            renderSettingsPage(allCategoriesAndKeywords);
+            categoriesAndKeywordsCache = await res.json();
+            renderSettingsPage(categoriesAndKeywordsCache);
         } catch (e) {
             tg.showAlert('Lỗi tải dữ liệu cài đặt.');
         }
@@ -179,9 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
         incomeEl.textContent = formatCurrency(summary.income || 0);
         expenseEl.textContent = formatCurrency(summary.expense || 0);
         balanceEl.textContent = formatCurrency(summary.balance || 0);
-        incomeEl.classList.remove('skeleton', 'skeleton-line');
-        expenseEl.classList.remove('skeleton', 'skeleton-line');
-        balanceEl.classList.remove('skeleton', 'skeleton-line');
+        [incomeEl, expenseEl, balanceEl].forEach(el => el.classList.remove('skeleton', 'skeleton-line'));
         balanceEl.classList.toggle('text-red', (summary.balance || 0) < 0);
         chartContainer.classList.remove('skeleton', 'skeleton-block');
         renderPieChart(transactions);
@@ -198,6 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         chartCanvas.style.display = 'block';
         noChartDataEl.classList.add('hidden');
+        
         const categoryTotals = expenseTransactions.reduce((acc, curr) => {
             acc[curr.category] = (acc[curr.category] || 0) + curr.amount;
             return acc;
@@ -256,13 +277,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (incomeExpenseBarChart) incomeExpenseBarChart.destroy();
         incomeExpenseBarChart = new Chart(incomeExpenseBarChartCanvas, {
             type: 'bar', data: { labels: months, datasets: [{ label: 'Thu nhập', data: incomeData, backgroundColor: 'rgba(75, 192, 192, 0.6)' }, { label: 'Chi tiêu', data: expenseData, backgroundColor: 'rgba(255, 99, 132, 0.6)' }] },
-            options: { responsive: true, maintainAspectRatio: false }
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
         });
 
         if (trendsLineChart) trendsLineChart.destroy();
         trendsLineChart = new Chart(trendsLineChartCanvas, {
             type: 'line', data: { labels: months, datasets: [{ label: 'Thu nhập', data: incomeData, borderColor: 'rgba(75, 192, 192, 1)', fill: false, tension: 0.1 }, { label: 'Chi tiêu', data: expenseData, borderColor: 'rgba(255, 99, 132, 1)', fill: false, tension: 0.1 }] },
-            options: { responsive: true, maintainAspectRatio: false }
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
         });
     }
 
@@ -315,7 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function applyFilters() {
         const searchTerm = searchInput.value.toLowerCase();
         const activeFilter = filterButtonsContainer.querySelector('.active').dataset.filter;
-        const filteredTransactions = allTransactions.filter(t => {
+        const filteredTransactions = (monthlyDataCache[`${currentYear}-${currentMonth}`]?.transactionsData || []).filter(t => {
             const matchesFilter = activeFilter === 'all' || t.type === activeFilter;
             const matchesSearch = t.content.toLowerCase().includes(searchTerm) || t.category.toLowerCase().includes(searchTerm) || (t.note && t.note.toLowerCase().includes(searchTerm));
             return matchesFilter && matchesSearch;
@@ -382,7 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
             finalCategories.push({ category, icon, keywords });
         });
         
-        tg.showPopup({ title: 'Xác nhận', message: 'Lưu lại các thay đổi về danh mục và từ khóa? Thao tác này sẽ ghi đè toàn bộ cài đặt cũ.', buttons: [{ id: 'save', type: 'default', text: 'Lưu' }, { type: 'cancel' }]
+        tg.showPopup({ title: 'Xác nhận', message: 'Lưu lại các thay đổi về danh mục và từ khóa?', buttons: [{ id: 'save', type: 'default', text: 'Lưu' }, { type: 'cancel' }]
         }, async (buttonId) => {
             if (buttonId === 'save') {
                 tg.showProgress();
@@ -391,7 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const result = await res.json();
                     if(!result.success) throw new Error(result.error);
                     tg.showAlert('Đã lưu cài đặt thành công!');
-                    allCategoriesAndKeywords = [];
+                    categoriesAndKeywordsCache = null; // Xóa cache để lần sau vào lại sẽ tải mới
                 } catch(e) { tg.showAlert('Lưu cài đặt thất bại: ' + e.message); } 
                 finally { tg.hideProgress(); }
             }
