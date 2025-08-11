@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // =================================================================
 
     // QUAN TRỌNG: Dán URL Google Apps Script Web App của bạn vào đây
-    const apiUrl = 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL';
+    const apiUrl = 'https://script.google.com/macros/s/AKfycbxBmZIl_IqEP1o0LmU0XislgnJ-L27_cRhgojvV4bblCVo7xplQS-HGHY_jIlInA2Kj/exec';
 
     // Khởi tạo Telegram Web App
     const tg = window.Telegram.WebApp;
