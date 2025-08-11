@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Quản lý Tài chính</title>
+    <title>Xem trước Giao diện MiniApp</title>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     
@@ -11,8 +11,271 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* ==========================================================================
+           1. BIẾN MÀU SẮC VÀ CÀI ĐẶT CHUNG
+           ========================================================================== */
+        :root {
+            --primary-color: #007AFF;
+            --background-color: #F0F2F5;
+            --card-bg-color: #FFFFFF;
+            --text-primary-color: #1c1c1e;
+            --text-secondary-color: #6c757d;
+            --border-color: #EAECEF;
+            --income-color: #28a745;
+            --expense-color: #dc3545;
+            --balance-color: #17a2b8;
+            --shadow-light: 0 4px 15px rgba(0, 0, 0, 0.06);
+            --font-family: 'Be Vietnam Pro', sans-serif;
+        }
 
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--background-color);
+            color: var(--text-primary-color);
+            padding-top: 60px;
+            padding-bottom: 70px;
+        }
+
+        /* ==========================================================================
+           2. BỐ CỤC CHÍNH (HEADER, NAV, MAIN)
+           ========================================================================== */
+        .app-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background-color: var(--card-bg-color);
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 1rem;
+            border-bottom: 1px solid var(--border-color);
+            z-index: 100;
+        }
+
+        .app-header h1 {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 70px;
+            background-color: var(--card-bg-color);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+            z-index: 100;
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            color: var(--text-secondary-color);
+            transition: color 0.2s ease-in-out;
+            padding: 0.5rem;
+            flex-grow: 1;
+        }
+        
+        .nav-item i {
+            font-size: 1.25rem;
+            margin-bottom: 4px;
+        }
+
+        .nav-item span {
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+
+        .nav-item.active {
+            color: var(--primary-color);
+        }
+
+        #app-content {
+            padding: 1rem;
+        }
+        
+        /* ==========================================================================
+           3. CÁC THÀNH PHẦN (COMPONENTS)
+           ========================================================================== */
+        .card {
+            background-color: var(--card-bg-color);
+            border-radius: 12px;
+            padding: 1rem;
+            box-shadow: var(--shadow-light);
+            margin-bottom: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+        }
+        
+        .card-title i {
+            margin-right: 0.5rem;
+            color: var(--primary-color);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-card {
+            padding: 1rem;
+            border-radius: 10px;
+        }
+
+        .stat-card .label {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-secondary-color);
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-card .amount {
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+
+        .stat-card.income .amount { color: var(--income-color); }
+        .stat-card.expense .amount { color: var(--expense-color); }
+        .stat-card.balance .amount { color: var(--balance-color); }
+
+        .transaction-list {
+            list-style: none;
+        }
+
+        .transaction-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .transaction-item:last-child { border-bottom: none; }
+
+        .transaction-item .icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            color: white;
+        }
+
+        .transaction-item .icon.income { background-color: var(--income-color); }
+        .transaction-item .icon.expense { background-color: var(--expense-color); }
+
+        .transaction-item .details { flex-grow: 1; }
+        .transaction-item .content { font-weight: 600; }
+        .transaction-item .category { font-size: 0.85rem; color: var(--text-secondary-color); }
+        .transaction-item .amount { font-weight: 700; white-space: nowrap; }
+        .transaction-item .amount.income { color: var(--income-color); }
+        .transaction-item .amount.expense { color: var(--expense-color); }
+
+        #expense-pie-chart-container { height: 300px; position: relative; }
+
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary-color);
+        }
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* ==========================================================================
+           4. HIỆU ỨNG VÀ TIỆN ÍCH
+           ========================================================================== */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+        }
+        .loading-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #ddd;
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #toast-container {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 3000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .toast {
+            background-color: var(--text-primary-color);
+            color: white;
+            padding: 0.75rem 1.25rem;
+            border-radius: 20px;
+            box-shadow: var(--shadow-light);
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateY(-20px);
+            animation: fadeInDown 0.3s forwards;
+        }
+        .toast.error {
+            background-color: var(--expense-color);
+        }
+        @keyframes fadeInDown {
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeOutUp {
+            to { opacity: 0; transform: translateY(-20px); }
+        }
+    </style>
 </head>
 <body>
 
@@ -28,31 +291,201 @@
         </main>
 
     <nav class="bottom-nav">
-        <a href="#" class="nav-item active" data-page="dashboard">
-            <i class="fas fa-tachometer-alt"></i>
-            <span>Tổng quan</span>
-        </a>
-        <a href="#" class="nav-item" data-page="transactions">
-            <i class="fas fa-exchange-alt"></i>
-            <span>Giao dịch</span>
-        </a>
-        <a href="#" class="nav-item" data-page="reports">
-            <i class="fas fa-chart-line"></i>
-            <span>Báo cáo</span>
-        </a>
-        <a href="#" class="nav-item" data-page="settings">
-            <i class="fas fa-cogs"></i>
-            <span>Cài đặt</span>
-        </a>
+        <a href="#" class="nav-item active" data-page="dashboard"><i class="fas fa-tachometer-alt"></i><span>Tổng quan</span></a>
+        <a href="#" class="nav-item" data-page="transactions"><i class="fas fa-exchange-alt"></i><span>Giao dịch</span></a>
+        <a href="#" class="nav-item" data-page="reports"><i class="fas fa-chart-line"></i><span>Báo cáo</span></a>
+        <a href="#" class="nav-item" data-page="settings"><i class="fas fa-cogs"></i><span>Cài đặt</span></a>
     </nav>
 
     <div id="modal-container"></div>
-
     <div id="toast-container"></div>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <script src="script.js"></script>
+    <script>
+        // ==========================================================================
+        // 1. KHỞI TẠO ỨNG DỤNG VÀ QUẢN LÝ TRẠNG THÁI
+        // ==========================================================================
+        const AppState = {
+            apiUrl: 'DUMMY_API_URL', // Dùng URL giả để xem trước
+            sheetId: 'DUMMY_SHEET_ID',
+            categories: [],
+        };
 
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            // Ghi đè URL giả nếu có URL thật
+            if (urlParams.has('api')) AppState.apiUrl = urlParams.get('api');
+            if (urlParams.has('sheetId')) AppState.sheetId = urlParams.get('sheetId');
+            
+            setupNavigation();
+            navigateTo('dashboard');
+        });
+        
+        // ==========================================================================
+        // 2. ĐIỀU HƯỚNG (ROUTING)
+        // ==========================================================================
+        function setupNavigation() {
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    if (item.classList.contains('active')) return;
+
+                    document.querySelector('.nav-item.active').classList.remove('active');
+                    item.classList.add('active');
+
+                    const title = item.querySelector('span').textContent;
+                    document.getElementById('header-title').textContent = title;
+
+                    navigateTo(item.dataset.page);
+                });
+            });
+        }
+
+        function navigateTo(page) {
+            const contentArea = document.getElementById('app-content');
+            contentArea.innerHTML = '';
+            switch (page) {
+                case 'dashboard':
+                    renderDashboard(contentArea);
+                    break;
+                case 'transactions':
+                    contentArea.innerHTML = `<div class="empty-state"><i class="fas fa-tools"></i><p>Chức năng xem danh sách giao dịch đang được xây dựng.</p></div>`;
+                    break;
+                case 'reports':
+                    contentArea.innerHTML = `<div class="empty-state"><i class="fas fa-tools"></i><p>Chức năng báo cáo chi tiết đang được xây dựng.</p></div>`;
+                    break;
+                case 'settings':
+                    contentArea.innerHTML = `<div class="empty-state"><i class="fas fa-tools"></i><p>Chức năng cài đặt đang được xây dựng.</p></div>`;
+                    break;
+                default:
+                    contentArea.innerHTML = `<div class="empty-state"><i class="fas fa-question-circle"></i><p>Trang không tồn tại.</p></div>`;
+            }
+        }
+
+        // ==========================================================================
+        // 3. LOGIC TRANG "TỔNG QUAN" (DASHBOARD)
+        // ==========================================================================
+        let expenseChartInstance = null;
+
+        function renderDashboard(container) {
+            const dashboardHTML = `
+                <div class="card">
+                    <div class="stats-grid" id="dashboard-stats">
+                        <div class="stat-card income"><div class="label">TỔNG THU</div><div class="amount">5.000.000đ</div></div>
+                        <div class="stat-card expense"><div class="label">TỔNG CHI</div><div class="amount">1.250.000đ</div></div>
+                        <div class="stat-card balance"><div class="label">SỐ DƯ</div><div class="amount">3.750.000đ</div></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h2 class="card-title"><i class="fas fa-chart-pie"></i>Phân tích Chi tiêu Tháng này</h2>
+                    <div id="expense-pie-chart-container"><canvas id="expensePieChart"></canvas></div>
+                </div>
+                <div class="card">
+                    <h2 class="card-title"><i class="fas fa-history"></i>Giao dịch gần nhất</h2>
+                    <ul class="transaction-list" id="recent-transactions"></ul>
+                </div>
+            `;
+            container.innerHTML = dashboardHTML;
+
+            // Dùng dữ liệu giả để xem trước
+            const fakeChartData = [
+                { category: 'Ăn uống', amount: 650000 },
+                { category: 'Di chuyển', amount: 300000 },
+                { category: 'Mua sắm', amount: 200000 },
+                { category: 'Khác', amount: 100000 },
+            ];
+            const fakeTransactions = [
+                { type: 'Chi tiêu', content: 'Cà phê cuối tuần', date: '11/08/2025', category: 'Giải trí', amount: 75000 },
+                { type: 'Thu nhập', content: 'Lương Part-time', date: '10/08/2025', category: 'Lương', amount: 2000000 },
+                { type: 'Chi tiêu', content: 'Ăn tối', date: '10/08/2025', category: 'Ăn uống', amount: 150000 },
+                { type: 'Chi tiêu', content: 'Đổ xăng', date: '09/08/2025', category: 'Di chuyển', amount: 50000 },
+            ];
+            
+            displayExpensePieChart(fakeChartData);
+            displayRecentTransactions(document.getElementById('recent-transactions'), fakeTransactions);
+        }
+
+        function displayExpensePieChart(chartData) {
+            const container = document.getElementById('expense-pie-chart-container');
+            const ctx = document.getElementById('expensePieChart').getContext('2d');
+            
+            if(expenseChartInstance) expenseChartInstance.destroy();
+            if (!chartData || chartData.length === 0) {
+                container.innerHTML = `<div class="empty-state"><i class="fas fa-chart-pie"></i><p>Không có dữ liệu chi tiêu.</p></div>`;
+                return;
+            }
+            
+            expenseChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: chartData.map(item => item.category),
+                    datasets: [{
+                        data: chartData.map(item => item.amount),
+                        backgroundColor: ['#007AFF', '#34C759', '#FF9500', '#FF3B30', '#5856D6', '#AF52DE', '#FF2D55'],
+                        borderColor: 'var(--card-bg-color)',
+                        borderWidth: 3
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { font: { family: "'Be Vietnam Pro', sans-serif" } } },
+                        tooltip: { callbacks: { label: (context) => `${context.label}: ${formatCurrency(context.raw)}` } }
+                    }
+                }
+            });
+        }
+
+        function displayRecentTransactions(container, transactions) {
+            if (!transactions || transactions.length === 0) {
+                container.innerHTML = `<div class="empty-state"><p>Không có giao dịch nào.</p></div>`;
+                return;
+            }
+            let html = '';
+            transactions.forEach(tx => {
+                const isIncome = tx.type === 'Thu nhập';
+                const iconClass = isIncome ? 'fa-arrow-down' : 'fa-arrow-up';
+                const typeClass = isIncome ? 'income' : 'expense';
+                html += `<li class="transaction-item"><div class="icon ${typeClass}"><i class="fas ${iconClass}"></i></div><div class="details"><div class="content">${tx.content}</div><div class="category">${formatDate(tx.date)} - ${tx.category}</div></div><div class="amount ${typeClass}">${isIncome ? '+' : '-'}${formatCurrency(tx.amount)}</div></li>`;
+            });
+            container.innerHTML = html;
+        }
+
+        // ==========================================================================
+        // 4. CÁC HÀM TIỆN ÍCH
+        // ==========================================================================
+        function showToast(message, type = "success") {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.animation = 'fadeOutUp 0.3s forwards';
+                toast.addEventListener('animationend', () => toast.remove());
+            }, 3000);
+        }
+
+        function formatCurrency(number) {
+            if (typeof number !== 'number') return '0đ';
+            return number.toLocaleString('vi-VN') + 'đ';
+        }
+
+        function formatDate(dateString) {
+            const parts = dateString.split('/');
+            if (parts.length < 3) return dateString;
+            return `Ngày ${parts[0]} tháng ${parts[1]}`;
+        }
+        
+        // Mô phỏng lỗi API để bạn thấy thông báo lỗi
+        setTimeout(() => {
+             if (AppState.apiUrl === 'DUMMY_API_URL') {
+                showToast("Lỗi API: Không có kết nối (đây là bản xem trước).", "error");
+             }
+        }, 1000);
+
+    </script>
 </body>
 </html>
