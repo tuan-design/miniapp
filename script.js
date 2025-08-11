@@ -1,427 +1,487 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // =================================================================
-    // CẤU HÌNH VÀ KHỞI TẠO
-    // =================================================================
+// ==========================================================================
+// 1. KHỞI TẠO ỨNG DỤNG VÀ QUẢN LÝ TRẠNG THÁI
+// ==========================================================================
 
-    // QUAN TRỌNG: Dán URL Google Apps Script Web App của bạn vào đây
-    const apiUrl = 'https://script.google.com/macros/s/AKfycbxBmZIl_IqEP1o0LmU0XislgnJ-L27_cRhgojvV4bblCVo7xplQS-HGHY_jIlInA2Kj/exec';
+const AppState = {
+    apiUrl: null,
+    sheetId: null,
+    categories: [], // Cache danh sách danh mục để dùng lại
+};
 
-    // Khởi tạo Telegram Web App
-    const tg = window.Telegram.WebApp;
-    tg.ready();
-    tg.expand();
-    try {
-        // Cố gắng đặt màu header của Mini App trùng với theme Telegram
-        tg.setHeaderColor(getComputedStyle(document.documentElement).getPropertyValue('--tg-bg-color').trim());
-    } catch(e) { console.error("Không thể đặt màu header:", e); }
+document.addEventListener('DOMContentLoaded', async () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    AppState.apiUrl = urlParams.get('api');
+    AppState.sheetId = urlParams.get('sheetId');
 
-    // =================================================================
-    // LẤY CÁC ĐỐI TƯỢNG DOM (ELEMENTS)
-    // =================================================================
-    
-    // Chung
-    const monthDisplay = document.getElementById('month-display');
-    const prevMonthBtn = document.getElementById('prev-month-btn');
-    const nextMonthBtn = document.getElementById('next-month-btn');
-    const pages = document.querySelectorAll('.page');
-    const tabButtons = document.querySelectorAll('.tab-button');
-    
-    // Trang Tổng quan
-    const incomeEl = document.getElementById('income-amount');
-    const expenseEl = document.getElementById('expense-amount');
-    const balanceEl = document.getElementById('balance-amount');
-    const chartContainer = document.getElementById('chart-container');
-    const chartCanvas = document.getElementById('expense-pie-chart');
-    const noChartDataEl = document.getElementById('no-chart-data');
-    const recentTransactionsListEl = document.getElementById('recent-transactions-list');
-
-    // Trang Giao dịch
-    const searchInput = document.getElementById('search-input');
-    const filterButtonsContainer = document.getElementById('filter-buttons');
-    const fullTransactionsListEl = document.getElementById('full-transactions-list');
-
-    // Trang Báo cáo
-    const incomeExpenseBarChartCanvas = document.getElementById('income-expense-bar-chart');
-    const trendsLineChartCanvas = document.getElementById('trends-line-chart');
-
-    // Trang Ngân sách
-    const budgetsListEl = document.getElementById('budgets-list');
-    const saveBudgetsBtn = document.getElementById('save-budgets-btn');
-    const currentBudgetMonthEl = document.getElementById('current-budget-month');
-
-    // Trang Cài đặt
-    const settingsListEl = document.getElementById('settings-list');
-    const saveSettingsBtn = document.getElementById('save-settings-btn');
-    
-    // =================================================================
-    // BIẾN TRẠNG THÁI CỦA ỨNG DỤNG
-    // =================================================================
-    let currentDate = new Date();
-    let currentMonth = currentDate.getMonth() + 1;
-    let currentYear = currentDate.getFullYear();
-    
-    // Biến lưu trữ (cache) dữ liệu để tránh gọi API liên tục
-    let monthlyDataCache = {};
-    let yearlySummaryCache = {};
-    let categoriesAndKeywordsCache = null;
-    
-    // Biến lưu trữ các biểu đồ
-    let expensePieChart, incomeExpenseBarChart, trendsLineChart;
-    
-    // =================================================================
-    // HÀM TIỆN ÍCH
-    // =================================================================
-    
-    const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
-    
-    // =================================================================
-    // LOGIC ĐIỀU HƯỚNG (NAVIGATION)
-    // =================================================================
-
-    function navigateTo(pageId) {
-        pages.forEach(page => page.classList.add('hidden'));
-        tabButtons.forEach(btn => btn.classList.remove('active'));
-
-        document.getElementById(`page-${pageId}`).classList.remove('hidden');
-        document.querySelector(`.tab-button[data-page="${pageId}"]`).classList.add('active');
-
-        // Khi chuyển tab, tải dữ liệu đặc thù cho tab đó
-        const isYearlyView = pageId === 'reports';
-        monthDisplay.style.visibility = isYearlyView ? 'hidden' : 'visible';
-        prevMonthBtn.style.visibility = isYearlyView ? 'hidden' : 'visible';
-        nextMonthBtn.style.visibility = isYearlyView ? 'hidden' : 'visible';
-
-
-        switch(pageId) {
-            case 'reports':
-                fetchAndRenderYearlyData(currentYear);
-                break;
-            case 'budgets':
-                fetchAndRenderBudgetsPage(currentMonth, currentYear);
-                break;
-            case 'settings':
-                fetchAndRenderSettingsPage();
-                break;
-        }
+    if (!AppState.apiUrl || !AppState.sheetId) {
+        showToast("Lỗi: Thiếu API URL hoặc Sheet ID trên URL.", "error");
+        document.getElementById('app-content').innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Không thể tải ứng dụng.</p></div>`;
+        return;
     }
 
-    tabButtons.forEach(button => {
-        button.addEventListener('click', () => navigateTo(button.dataset.page));
-    });
+    // Tải danh sách danh mục một lần duy nhất khi ứng dụng khởi động
+    AppState.categories = await callApi('getCategories');
 
-    // =================================================================
-    // LOGIC TẢI DỮ LIỆU TỪ BACKEND
-    // =================================================================
-
-    async function fetchMainDataForMonth(month, year) {
-        const cacheKey = `${year}-${month}`;
-        if (monthlyDataCache[cacheKey]) {
-            const { summaryData, transactionsData } = monthlyDataCache[cacheKey];
-            renderDashboard(summaryData, transactionsData);
-            renderTransactionsPage(transactionsData);
-            return;
-        }
-
-        try {
-            const [summaryRes, transactionsRes] = await Promise.all([
-                fetch(`${apiUrl}?action=getFinancialSummary&month=${month}&year=${year}`),
-                fetch(`${apiUrl}?action=getTransactions&month=${month}&year=${year}`)
-            ]);
-            if (!summaryRes.ok || !transactionsRes.ok) throw new Error('Lỗi mạng');
-            
-            const summaryData = await summaryRes.json();
-            const transactionsData = await transactionsRes.json();
-            
-            monthlyDataCache[cacheKey] = { summaryData, transactionsData };
-
-            renderDashboard(summaryData, transactionsData);
-            renderTransactionsPage(transactionsData);
-
-        } catch (error) {
-            tg.showAlert('Đã xảy ra lỗi khi tải dữ liệu tháng: ' + error.message);
-        }
-    }
-
-    async function fetchAndRenderYearlyData(year) {
-        if (yearlySummaryCache.year === year) {
-            renderReportsPage(yearlySummaryCache.data);
-            return;
-        }
-        try {
-             const res = await fetch(`${apiUrl}?action=getYearlySummary&year=${year}`);
-             if (!res.ok) throw new Error('Lỗi mạng');
-             const data = await res.json();
-             yearlySummaryCache = { year: year, data: data };
-             renderReportsPage(data);
-        } catch (e) {
-             tg.showAlert('Lỗi tải dữ liệu báo cáo năm.');
-        }
-    }
-
-    async function fetchAndRenderBudgetsPage(month, year) {
-        try {
-            const [budgetsRes, categoriesRes, transactionsRes] = await Promise.all([
-                fetch(`${apiUrl}?action=getBudgets&month=${month}&year=${year}`),
-                fetch(`${apiUrl}?action=getCategoriesAndKeywords`),
-                fetch(`${apiUrl}?action=getTransactions&month=${month}&year=${year}`)
-            ]);
-             if (!budgetsRes.ok || !categoriesRes.ok || !transactionsRes.ok) throw new Error('Lỗi mạng');
-             const budgetsData = await budgetsRes.json();
-             const categoriesData = await categoriesRes.json();
-             const transactionsData = await transactionsRes.json();
-             categoriesAndKeywordsCache = categoriesData;
-             renderBudgetsPage(budgetsData, transactionsData, categoriesData, month, year);
-        } catch(e) {
-            tg.showAlert('Lỗi tải dữ liệu ngân sách.');
-        }
-    }
-
-    async function fetchAndRenderSettingsPage() {
-        if(categoriesAndKeywordsCache) {
-            renderSettingsPage(categoriesAndKeywordsCache);
-            return;
-        }
-        try {
-            const res = await fetch(`${apiUrl}?action=getCategoriesAndKeywords`);
-            if (!res.ok) throw new Error('Lỗi mạng');
-            categoriesAndKeywordsCache = await res.json();
-            renderSettingsPage(categoriesAndKeywordsCache);
-        } catch (e) {
-            tg.showAlert('Lỗi tải dữ liệu cài đặt.');
-        }
-    }
-    
-    // =================================================================
-    // LOGIC HIỂN THỊ (RENDER) CHO TỪNG TRANG
-    // =================================================================
-    
-    function renderDashboard(summary, transactions) {
-        monthDisplay.textContent = `Tháng ${currentMonth}/${currentYear}`;
-        monthDisplay.classList.remove('skeleton', 'skeleton-text');
-        incomeEl.textContent = formatCurrency(summary.income || 0);
-        expenseEl.textContent = formatCurrency(summary.expense || 0);
-        balanceEl.textContent = formatCurrency(summary.balance || 0);
-        [incomeEl, expenseEl, balanceEl].forEach(el => el.classList.remove('skeleton', 'skeleton-line'));
-        balanceEl.classList.toggle('text-red', (summary.balance || 0) < 0);
-        chartContainer.classList.remove('skeleton', 'skeleton-block');
-        renderPieChart(transactions);
-        renderRecentTransactions(transactions);
-    }
-    
-    function renderPieChart(transactions) {
-        const expenseTransactions = transactions.filter(t => t.type === 'Chi tiêu');
-        if (expenseTransactions.length === 0) {
-            chartCanvas.style.display = 'none';
-            noChartDataEl.classList.remove('hidden');
-            if (expensePieChart) expensePieChart.destroy();
-            return;
-        }
-        chartCanvas.style.display = 'block';
-        noChartDataEl.classList.add('hidden');
-        
-        const categoryTotals = expenseTransactions.reduce((acc, curr) => {
-            acc[curr.category] = (acc[curr.category] || 0) + curr.amount;
-            return acc;
-        }, {});
-        if (expensePieChart) expensePieChart.destroy();
-        expensePieChart = new Chart(chartCanvas, {
-            type: 'doughnut', data: { labels: Object.keys(categoryTotals), datasets: [{ data: Object.values(categoryTotals), backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'], borderWidth: 0 }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } }, cutout: '60%' }
-        });
-    }
-
-    function renderRecentTransactions(transactions) {
-        recentTransactionsListEl.innerHTML = '';
-        if (transactions.length === 0) {
-            recentTransactionsListEl.innerHTML = '<p class="no-data-message">Không có giao dịch nào.</p>';
-            return;
-        }
-        transactions.slice(0, 3).forEach(t => recentTransactionsListEl.appendChild(createTransactionElement(t)));
-    }
-    
-    function renderTransactionsPage(transactions) {
-        fullTransactionsListEl.innerHTML = '';
-        if (transactions.length === 0) {
-            fullTransactionsListEl.innerHTML = '<p class="no-data-message" style="text-align: center; padding: 1rem 0;">Không có giao dịch nào.</p>';
-            return;
-        }
-        const groupedByDate = transactions.reduce((groups, t) => {
-            const date = t.date;
-            if (!groups[date]) groups[date] = [];
-            groups[date].push(t);
-            return groups;
-        }, {});
-        const sortedDates = Object.keys(groupedByDate).sort((a,b) => compareDates(b, a));
-        for (const date of sortedDates) {
-            const dateHeader = document.createElement('h3');
-            dateHeader.className = 'transaction-group-header';
-            dateHeader.textContent = date;
-            fullTransactionsListEl.appendChild(dateHeader);
-            groupedByDate[date].forEach(t => fullTransactionsListEl.appendChild(createTransactionElement(t)));
-        }
-    }
-    
-    function createTransactionElement(t) {
-        const isExpense = t.type === 'Chi tiêu';
-        const el = document.createElement('div');
-        el.className = 'transaction-item';
-        el.innerHTML = `<div class="transaction-details"><p class="transaction-content">${t.content}</p><p class="transaction-category">${t.category}</p></div><p class="transaction-amount ${isExpense ? 'text-red' : 'text-green'}">${isExpense ? '-' : '+'}${formatCurrency(t.amount)}</p>`;
-        return el;
-    }
-    
-    function renderReportsPage(data) {
-        const months = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11", "T12"];
-        const incomeData = data.map(m => m.income);
-        const expenseData = data.map(m => m.expense);
-
-        if (incomeExpenseBarChart) incomeExpenseBarChart.destroy();
-        incomeExpenseBarChart = new Chart(incomeExpenseBarChartCanvas, {
-            type: 'bar', data: { labels: months, datasets: [{ label: 'Thu nhập', data: incomeData, backgroundColor: 'rgba(75, 192, 192, 0.6)' }, { label: 'Chi tiêu', data: expenseData, backgroundColor: 'rgba(255, 99, 132, 0.6)' }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-        });
-
-        if (trendsLineChart) trendsLineChart.destroy();
-        trendsLineChart = new Chart(trendsLineChartCanvas, {
-            type: 'line', data: { labels: months, datasets: [{ label: 'Thu nhập', data: incomeData, borderColor: 'rgba(75, 192, 192, 1)', fill: false, tension: 0.1 }, { label: 'Chi tiêu', data: expenseData, borderColor: 'rgba(255, 99, 132, 1)', fill: false, tension: 0.1 }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-        });
-    }
-
-    function renderBudgetsPage(budgets, transactions, categories, month, year) {
-        budgetsListEl.innerHTML = '';
-        currentBudgetMonthEl.textContent = `${month}/${year}`;
-        const expenseByCategory = transactions.filter(t => t.type === 'Chi tiêu').reduce((acc, curr) => {
-            acc[curr.category] = (acc[curr.category] || 0) + curr.amount;
-            return acc;
-        }, {});
-        
-        categories.forEach(cat => {
-            if (cat.category === "Khác") return;
-            const categoryName = cat.category;
-            const budgetAmount = budgets[categoryName] || 0;
-            const spentAmount = expenseByCategory[categoryName] || 0;
-            const progress = budgetAmount > 0 ? Math.min((spentAmount / budgetAmount) * 100, 100) : 0;
-            const itemEl = document.createElement('div');
-            itemEl.className = 'budget-item';
-            itemEl.innerHTML = `<div class="info"><span>${cat.icon} ${categoryName}</span><span>${formatCurrency(spentAmount)} /</span><input type="number" class="budget-input" data-category="${categoryName}" value="${budgetAmount}" placeholder="Đặt ngân sách"></div><div class="progress-bar"><div class="progress" style="width: ${progress}%; background-color: ${progress > 90 ? '#EF4444' : (progress > 70 ? '#F59E0B' : '#10B981')}"></div></div>`;
-            budgetsListEl.appendChild(itemEl);
-        });
-    }
-
-    function renderSettingsPage(categories) {
-        settingsListEl.innerHTML = '';
-        categories.forEach(cat => {
-            const catEl = document.createElement('div');
-            catEl.className = 'setting-category';
-            catEl.innerHTML = `<div class="setting-category-header"><span>${cat.icon} ${cat.category}</span><span>${cat.keywords.length} từ khóa &nbsp; ▼</span></div><div class="keyword-tags hidden">${cat.keywords.map(kw => `<span class="keyword-tag">${kw}<span class="delete-keyword" data-keyword="${kw}">&times;</span></span>`).join('')}<input class="add-keyword-input" placeholder="+ Thêm"></div>`;
-            settingsListEl.appendChild(catEl);
-        });
-    }
-
-    // =================================================================
-    // LOGIC XỬ LÝ SỰ KIỆN
-    // =================================================================
-    
-    prevMonthBtn.addEventListener('click', () => {
-        currentMonth--;
-        if (currentMonth < 1) { currentMonth = 12; currentYear--; }
-        fetchMainDataForMonth(currentMonth, currentYear);
-    });
-    nextMonthBtn.addEventListener('click', () => {
-        currentMonth++;
-        if (currentMonth > 12) { currentMonth = 1; currentYear++; }
-        fetchMainDataForMonth(currentMonth, currentYear);
-    });
-
-    function applyFilters() {
-        const searchTerm = searchInput.value.toLowerCase();
-        const activeFilter = filterButtonsContainer.querySelector('.active').dataset.filter;
-        const filteredTransactions = (monthlyDataCache[`${currentYear}-${currentMonth}`]?.transactionsData || []).filter(t => {
-            const matchesFilter = activeFilter === 'all' || t.type === activeFilter;
-            const matchesSearch = t.content.toLowerCase().includes(searchTerm) || t.category.toLowerCase().includes(searchTerm) || (t.note && t.note.toLowerCase().includes(searchTerm));
-            return matchesFilter && matchesSearch;
-        });
-        renderTransactionsPage(filteredTransactions);
-    }
-    searchInput.addEventListener('input', applyFilters);
-    filterButtonsContainer.addEventListener('click', (e) => {
-        if (e.target.classList.contains('filter-btn')) {
-            filterButtonsContainer.querySelector('.active').classList.remove('active');
-            e.target.classList.add('active');
-            applyFilters();
-        }
-    });
-
-    saveBudgetsBtn.addEventListener('click', () => {
-        const budgetInputs = budgetsListEl.querySelectorAll('.budget-input');
-        const budgets = {};
-        budgetInputs.forEach(input => { budgets[input.dataset.category] = parseFloat(input.value) || 0; });
-        tg.showPopup({ title: 'Xác nhận', message: 'Bạn có chắc muốn lưu lại cài đặt ngân sách này?', buttons: [{ id: 'save', type: 'default', text: 'Lưu' }, { type: 'cancel' }]
-        }, async (buttonId) => {
-            if (buttonId === 'save') {
-                tg.showProgress();
-                try {
-                    const res = await fetch(apiUrl, { method: 'POST', body: JSON.stringify({ action: 'saveBudgets', payload: { month: currentMonth, year: currentYear, budgets } }) });
-                    const result = await res.json();
-                    if(!result.success) throw new Error(result.error);
-                    tg.showAlert('Đã lưu ngân sách thành công!');
-                } catch(e) { tg.showAlert('Lưu ngân sách thất bại: ' + e.message); } 
-                finally { tg.hideProgress(); }
-            }
-        });
-    });
-
-    settingsListEl.addEventListener('click', (e) => {
-        if (e.target.closest('.setting-category-header')) {
-            e.target.closest('.setting-category').querySelector('.keyword-tags').classList.toggle('hidden');
-        }
-        if (e.target.classList.contains('delete-keyword')) {
-            e.target.parentElement.remove();
-        }
-    });
-    settingsListEl.addEventListener('keypress', (e) => {
-        if (e.target.classList.contains('add-keyword-input') && e.key === 'Enter') {
-            e.preventDefault();
-            const newKeyword = e.target.value.trim();
-            if (newKeyword) {
-                const newTag = document.createElement('span');
-                newTag.className = 'keyword-tag';
-                newTag.innerHTML = `${newKeyword}<span class="delete-keyword" data-keyword="${newKeyword}">&times;</span>`;
-                e.target.before(newTag);
-                e.target.value = '';
-            }
-        }
-    });
-
-    saveSettingsBtn.addEventListener('click', () => {
-        const finalCategories = [];
-        settingsListEl.querySelectorAll('.setting-category').forEach(catEl => {
-            const category = catEl.querySelector('.setting-category-header span').textContent.split(' ').slice(1).join(' ');
-            const icon = catEl.querySelector('.setting-category-header span').textContent.split(' ')[0];
-            const keywords = [];
-            catEl.querySelectorAll('.keyword-tag').forEach(tag => { keywords.push(tag.textContent.trim().slice(0, -1).trim()); });
-            finalCategories.push({ category, icon, keywords });
-        });
-        
-        tg.showPopup({ title: 'Xác nhận', message: 'Lưu lại các thay đổi về danh mục và từ khóa?', buttons: [{ id: 'save', type: 'default', text: 'Lưu' }, { type: 'cancel' }]
-        }, async (buttonId) => {
-            if (buttonId === 'save') {
-                tg.showProgress();
-                try {
-                     const res = await fetch(apiUrl, { method: 'POST', body: JSON.stringify({ action: 'saveCategoriesAndKeywords', payload: finalCategories }) });
-                    const result = await res.json();
-                    if(!result.success) throw new Error(result.error);
-                    tg.showAlert('Đã lưu cài đặt thành công!');
-                    categoriesAndKeywordsCache = null; // Xóa cache để lần sau vào lại sẽ tải mới
-                } catch(e) { tg.showAlert('Lưu cài đặt thất bại: ' + e.message); } 
-                finally { tg.hideProgress(); }
-            }
-        });
-    });
-    
-    // =================================================================
-    // KHỞI ĐỘNG ỨNG DỤNG
-    // =================================================================
-    fetchMainDataForMonth(currentMonth, currentYear);
+    setupNavigation();
     navigateTo('dashboard');
 });
+
+// ==========================================================================
+// 2. ĐIỀU HƯỚNG (ROUTING)
+// ==========================================================================
+
+function setupNavigation() {
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => {
+        item.addEventListener('click', (event) => {
+            event.preventDefault();
+            if (item.classList.contains('active')) return;
+
+            document.querySelector('.nav-item.active').classList.remove('active');
+            item.classList.add('active');
+
+            const title = item.querySelector('span').textContent;
+            document.getElementById('header-title').textContent = title;
+
+            navigateTo(item.dataset.page);
+        });
+    });
+}
+
+function navigateTo(page) {
+    const contentArea = document.getElementById('app-content');
+    contentArea.innerHTML = '';
+
+    switch (page) {
+        case 'dashboard':
+            renderDashboard(contentArea);
+            break;
+        case 'transactions':
+            renderTransactionsPage(contentArea);
+            break;
+        case 'reports':
+            renderReportsPage(contentArea);
+            break;
+        case 'settings':
+            renderSettingsPage(contentArea);
+            break;
+        default:
+            contentArea.innerHTML = `<div class="empty-state"><i class="fas fa-question-circle"></i><p>Trang không tồn tại.</p></div>`;
+    }
+}
+
+// ==========================================================================
+// 3. GIAO TIẾP VỚI API (GOOGLE APPS SCRIPT)
+// ==========================================================================
+const PROXY_URL = 'https://miniappshare.netlify.app/.netlify/functions/proxy?url=';
+
+async function callApi(action, params = {}, method = 'GET', body = null) {
+    const loadingOverlay = document.getElementById('loading-overlay');
+    loadingOverlay.classList.add('visible');
+
+    try {
+        params.action = action;
+        params.sheetId = AppState.sheetId;
+        
+        const finalUrl = PROXY_URL + encodeURIComponent(AppState.apiUrl);
+        let response;
+
+        if (method === 'GET') {
+            const queryParams = new URLSearchParams(params);
+            const targetUrl = `${AppState.apiUrl}?${queryParams.toString()}`;
+            response = await fetch(PROXY_URL + encodeURIComponent(targetUrl));
+        } else { // POST
+            const options = {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...params, ...body })
+            };
+            response = await fetch(finalUrl, options);
+        }
+
+        if (!response.ok) throw new Error(`Lỗi mạng: ${response.statusText}`);
+        const data = await response.json();
+        if (data.error) throw new Error(data.error);
+        
+        return data;
+    } catch (error) {
+        showToast(`Lỗi API: ${error.message}`, "error");
+        return null;
+    } finally {
+        loadingOverlay.classList.remove('visible');
+    }
+}
+
+
+// ==========================================================================
+// 4. TRANG "TỔNG QUAN" (DASHBOARD)
+// ==========================================================================
+
+let expenseChartInstance = null;
+
+async function renderDashboard(container) {
+    const dashboardHTML = `
+        <div class="card">
+            <div class="stats-grid" id="dashboard-stats"></div>
+        </div>
+        <div class="card">
+            <h2 class="card-title"><i class="fas fa-chart-pie"></i>Phân tích Chi tiêu Tháng này</h2>
+            <div id="expense-pie-chart-container"><canvas id="expensePieChart"></canvas></div>
+        </div>
+        <div class="card">
+            <h2 class="card-title"><i class="fas fa-history"></i>Giao dịch gần nhất</h2>
+            <ul class="transaction-list" id="recent-transactions"></ul>
+        </div>
+    `;
+    container.innerHTML = dashboardHTML;
+
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+    const summaryData = await callApi('getFinancialSummary', { startDate: firstDay, endDate: lastDay });
+    if (summaryData) {
+        displayDashboardStats(summaryData);
+        displayExpensePieChart(summaryData.expenseCategories);
+    }
+    
+    const transactionData = await callApi('getTransactionsByMonth', {
+        month: now.getMonth() + 1,
+        year: now.getFullYear()
+    });
+    if(transactionData) {
+        const recentTransactions = transactionData.sort((a,b) => new Date(b.date.split('/').reverse().join('-')) - new Date(a.date.split('/').reverse().join('-'))).slice(0, 5);
+        displayRecentTransactions(document.getElementById('recent-transactions'), recentTransactions);
+    }
+}
+
+function displayDashboardStats(data) {
+    document.getElementById('dashboard-stats').innerHTML = `
+        <div class="stat-card income"><div class="label">TỔNG THU</div><div class="amount">${formatCurrency(data.income)}</div></div>
+        <div class="stat-card expense"><div class="label">TỔNG CHI</div><div class="amount">${formatCurrency(data.expense)}</div></div>
+        <div class="stat-card balance"><div class="label">SỐ DƯ</div><div class="amount">${formatCurrency(data.balance)}</div></div>`;
+}
+
+function displayExpensePieChart(chartData) {
+    const container = document.getElementById('expense-pie-chart-container');
+    const ctx = document.getElementById('expensePieChart').getContext('2d');
+    
+    if(expenseChartInstance) expenseChartInstance.destroy();
+    if (!chartData || chartData.length === 0) {
+        container.innerHTML = `<div class="empty-state"><i class="fas fa-chart-pie"></i><p>Không có dữ liệu chi tiêu.</p></div>`;
+        return;
+    }
+    
+    expenseChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: chartData.map(item => item.category),
+            datasets: [{
+                data: chartData.map(item => item.amount),
+                backgroundColor: ['#007AFF', '#34C759', '#FF9500', '#FF3B30', '#5856D6', '#AF52DE', '#FF2D55'],
+                borderColor: 'var(--card-bg-color)',
+                borderWidth: 3
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { font: { family: "'Be Vietnam Pro', sans-serif" } } },
+                tooltip: { callbacks: { label: (context) => `${context.label}: ${formatCurrency(context.raw)}` } }
+            }
+        }
+    });
+}
+
+function displayRecentTransactions(container, transactions) {
+    if (!transactions || transactions.length === 0) {
+        container.innerHTML = `<div class="empty-state"><p>Không có giao dịch nào.</p></div>`;
+        return;
+    }
+    let html = '';
+    transactions.forEach(tx => {
+        html += createTransactionItemHTML(tx);
+    });
+    container.innerHTML = html;
+}
+
+// ==========================================================================
+// 5. TRANG "GIAO DỊCH" (TRANSACTIONS)
+// ==========================================================================
+
+async function renderTransactionsPage(container) {
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    
+    container.innerHTML = `
+        <div class="card">
+            <div class="transactions-header">
+                <input type="month" id="month-selector" value="${currentMonth}">
+                <button id="add-transaction-btn" class="btn btn-primary"><i class="fas fa-plus"></i> Thêm mới</button>
+            </div>
+        </div>
+        <div class="card">
+            <h2 class="card-title"><i class="fas fa-list-ul"></i>Danh sách giao dịch</h2>
+            <ul class="transaction-list" id="full-transaction-list"></ul>
+        </div>
+    `;
+
+    document.getElementById('month-selector').addEventListener('change', fetchAndDisplayTransactions);
+    document.getElementById('add-transaction-btn').addEventListener('click', () => renderAddEditModal());
+
+    await fetchAndDisplayTransactions();
+}
+
+async function fetchAndDisplayTransactions() {
+    const monthSelector = document.getElementById('month-selector');
+    const [year, month] = monthSelector.value.split('-');
+    
+    const data = await callApi('getTransactionsByMonth', { month, year });
+    const container = document.getElementById('full-transaction-list');
+
+    if (data) {
+        displayFullTransactions(container, data);
+    }
+}
+
+function displayFullTransactions(container, transactions) {
+    if (!transactions || transactions.length === 0) {
+        container.innerHTML = `<div class="empty-state"><p>Không có giao dịch nào trong tháng này.</p></div>`;
+        return;
+    }
+    let html = '';
+    transactions.forEach(tx => {
+        html += createTransactionItemHTML(tx, true); // true để thêm nút edit/delete
+    });
+    container.innerHTML = html;
+
+    // Gắn sự kiện cho các nút sửa/xóa
+    container.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const txData = JSON.parse(btn.dataset.transaction);
+            renderAddEditModal(txData);
+        });
+    });
+    container.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const txData = JSON.parse(btn.dataset.transaction);
+            handleDeleteTransaction(txData);
+        });
+    });
+}
+
+// ==========================================================================
+// 6. TRANG "BÁO CÁO" (REPORTS)
+// ==========================================================================
+
+let monthlyChartInstance = null;
+
+async function renderReportsPage(container) {
+    const currentYear = new Date().getFullYear();
+    let yearOptions = '';
+    for (let i = 0; i < 5; i++) {
+        const year = currentYear - i;
+        yearOptions += `<option value="${year}">${year}</option>`;
+    }
+
+    container.innerHTML = `
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Báo cáo năm</h2>
+                <select id="year-selector">${yearOptions}</select>
+            </div>
+            <div id="monthly-report-chart-container">
+                <canvas id="monthlyBarChart"></canvas>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('year-selector').addEventListener('change', fetchAndDisplayReportCharts);
+    await fetchAndDisplayReportCharts();
+}
+
+async function fetchAndDisplayReportCharts() {
+    const year = document.getElementById('year-selector').value;
+    const data = await callApi('getMonthlyData', { year });
+    if (data) {
+        displayMonthlyBarChart(data);
+    }
+}
+
+function displayMonthlyBarChart(data) {
+    const container = document.getElementById('monthly-report-chart-container');
+    const ctx = document.getElementById('monthlyBarChart').getContext('2d');
+
+    if (monthlyChartInstance) monthlyChartInstance.destroy();
+    if (!data || data.length === 0) {
+        container.innerHTML = `<div class="empty-state"><p>Không có dữ liệu cho năm này.</p></div>`;
+        return;
+    }
+
+    monthlyChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.map(d => `Th ${d.month}`),
+            datasets: [
+                {
+                    label: 'Thu nhập',
+                    data: data.map(d => d.income),
+                    backgroundColor: 'rgba(40, 167, 69, 0.8)',
+                    borderColor: 'rgba(40, 167, 69, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Chi tiêu',
+                    data: data.map(d => d.expense),
+                    backgroundColor: 'rgba(220, 53, 69, 0.8)',
+                    borderColor: 'rgba(220, 53, 69, 1)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true } },
+            plugins: {
+                tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${formatCurrency(context.raw)}` } }
+            }
+        }
+    });
+}
+
+// ==========================================================================
+// 7. TRANG "CÀI ĐẶT" (SETTINGS)
+// ==========================================================================
+
+async function renderSettingsPage(container) {
+    let categoryOptions = AppState.categories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+
+    container.innerHTML = `
+        <div class="card">
+            <h2 class="card-title"><i class="fas fa-plus-circle"></i>Thêm Từ khóa Mới</h2>
+            <form id="add-keyword-form">
+                <div class="form-group">
+                    <label for="category-select">Chọn Danh mục</label>
+                    <select id="category-select" required>${categoryOptions}</select>
+                </div>
+                <div class="form-group">
+                    <label for="keyword-input">Từ khóa (phân cách bởi dấu phẩy ,)</label>
+                    <input type="text" id="keyword-input" placeholder="ví dụ: cà phê, highlands" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Thêm Từ khóa</button>
+            </form>
+        </div>
+        <div class="card">
+            <h2 class="card-title"><i class="fas fa-key"></i>Danh sách Từ khóa Hiện có</h2>
+            <div id="keywords-list"></div>
+        </div>
+    `;
+
+    document.getElementById('add-keyword-form').addEventListener('submit', handleAddKeyword);
+    await fetchAndDisplayKeywords();
+}
+
+async function fetchAndDisplayKeywords() {
+    const container = document.getElementById('keywords-list');
+    const data = await callApi('getKeywords');
+    if(data) {
+        if (data.length === 0) {
+            container.innerHTML = `<div class="empty-state"><p>Chưa có từ khóa nào.</p></div>`;
+            return;
+        }
+        let html = '';
+        data.forEach(cat => {
+            html += `
+                <div class="category-group">
+                    <h3>${cat.icon} ${cat.category}</h3>
+                    <div class="keywords-container">
+                        ${cat.keywords.split(',').map(k => k.trim()).filter(k => k).map(keyword => `
+                            <span class="keyword-tag">
+                                ${keyword}
+                                <button class="delete-keyword-btn" data-category="${cat.category}" data-keyword="${keyword}">&times;</button>
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+        container.querySelectorAll('.delete-keyword-btn').forEach(btn => {
+            btn.addEventListener('click', () => handleDeleteKeyword(btn.dataset.category, btn.dataset.keyword));
+        });
+    }
+}
+
+async function handleAddKeyword(event) {
+    event.preventDefault();
+    const category = document.getElementById('category-select').value;
+    const keywords = document.getElementById('keyword-input').value;
+    
+    const result = await callApi('addKeyword', {}, 'POST', { category, keywords });
+    if(result && result.success) {
+        showToast("Thêm từ khóa thành công!");
+        document.getElementById('keyword-input').value = '';
+        await fetchAndDisplayKeywords();
+    }
+}
+
+async function handleDeleteKeyword(category, keyword) {
+    if(!confirm(`Bạn có chắc muốn xóa từ khóa "${keyword}" khỏi danh mục "${category}"?`)) return;
+
+    const result = await callApi('deleteKeyword', {}, 'POST', { category, keyword });
+    if(result && result.success) {
+        showToast("Xóa từ khóa thành công!");
+        await fetchAndDisplayKeywords();
+    }
+}
+
+
+// ==========================================================================
+// 8. CÁC HÀM TIỆN ÍCH (UTILITIES)
+// ==========================================================================
+
+function createTransactionItemHTML(tx, withActions = false) {
+    const isIncome = tx.type === 'Thu nhập';
+    const iconClass = isIncome ? 'fa-arrow-down' : 'fa-arrow-up';
+    const typeClass = isIncome ? 'income' : 'expense';
+    const actionsHTML = withActions ? `
+        <div class="transaction-actions">
+            <button class="btn-icon edit-btn" data-transaction='${JSON.stringify(tx)}'><i class="fas fa-pen"></i></button>
+            <button class="btn-icon delete-btn" data-transaction='${JSON.stringify(tx)}'><i class="fas fa-trash"></i></button>
+        </div>
+    ` : '';
+    return `
+        <li class="transaction-item">
+            <div class="icon ${typeClass}"><i class="fas ${iconClass}"></i></div>
+            <div class="details">
+                <div class="content">${tx.content}</div>
+                <div class="category">${formatDate(tx.date)} - ${tx.category}</div>
+            </div>
+            <div class="amount ${typeClass}">${isIncome ? '+' : '-'}${formatCurrency(tx.amount)}</div>
+            ${actionsHTML}
+        </li>
+    `;
+}
+
+function showToast(message, type = "success") {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.animation = 'fadeOutUp 0.3s forwards';
+        toast.addEventListener('animationend', () => toast.remove());
+    }, 3000);
+}
+
+function formatCurrency(number) {
+    if (typeof number !== 'number') return '0đ';
+    return number.toLocaleString('vi-VN') + 'đ';
+}
+
+function formatDate(dateString) {
+    const parts = dateString.split('/');
+    if (parts.length < 3) return dateString;
+    return `Ngày ${parts[0]} tháng ${parts[1]}`;
+}
